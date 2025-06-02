@@ -1,0 +1,17 @@
+name: Deploy to S3
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Print deploy step (placeholder)
+        run: echo "This is where we’ll deploy to S3 or other AWS services"
