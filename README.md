@@ -52,6 +52,7 @@ Clone the repo:
 ```bash
 git clone https://github.com/mleib1337/animalsfourlife.git
 cd animalsfourlife
+```
 
 ---
 
@@ -79,11 +80,13 @@ Use the AWS CLI or AWS Console to deploy the stack, passing parameters for datab
 
 Example AWS CLI command:
 
+``` bash
 aws cloudformation deploy \
   --template-file infrastructure.yaml \
   --stack-name animalsfourlife-stack \
   --parameter-overrides DBUsername=admin DBPassword=YourSecurePassword123 MyIp=203.0.113.0/24 \
   --capabilities CAPABILITY_NAMED_IAM
+```
 
 ---
 
