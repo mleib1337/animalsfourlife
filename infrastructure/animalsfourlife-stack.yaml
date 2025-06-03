@@ -1,0 +1,299 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Aurora Serverless v2 Cluster for Animals Four Life with private subnets and S3 VPC Endpoint
+
+Parameters:
+  DBUsername:
+    Description: The database admin account username
+    Type: String
+    Default: admin
+
+  DBPassword:
+    Description: The database admin account password
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 41
+    AllowedPattern: "[a-zA-Z0-9@#?!^&*()-_+=]*"
+    ConstraintDescription: "Must be 8-41 characters and contain only allowed characters."
+
+  DBName:
+    Description: Initial database name
+    Type: String
+    Default: animalsdb
+
+  MyIp:
+    Description: The IP address allowed to access the database and Lambdas in CIDR notation, e.g. 203.0.113.25/32
+    Type: String
+    Default: 0.0.0.0/0
+
+Resources:
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: AnimalsVPC
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: AnimalsInternetGateway
+
+  AttachInternetGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: PublicSubnet1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: PublicSubnet2
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.4.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet2
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: PublicRouteTable
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachInternetGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: PrivateRouteTable1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: PrivateRouteTable2
+
+  PrivateSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivateSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+
+  S3VpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      RouteTableIds:
+        - !Ref PrivateRouteTable1
+        - !Ref PrivateRouteTable2
+      VpcEndpointType: Gateway
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnets for Aurora in private subnets
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      DBSubnetGroupName: animals-db-subnet-group
+
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow access to Aurora DB from specified IP
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: !Ref MyIp
+      Tags:
+        - Key: Name
+          Value: animals-db-sg
+
+  AuroraCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      Engine: aurora-mysql
+      EngineMode: provisioned
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref DBSecurityGroup
+      DatabaseName: !Ref DBName
+      DeletionProtection: false
+      EnableHttpEndpoint: true
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: 0.5
+        MaxCapacity: 2
+      Tags:
+        - Key: Name
+          Value: animals-db-cluster
+
+  AuroraInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBClusterIdentifier: !Ref AuroraCluster
+      DBInstanceClass: db.serverless
+      Engine: aurora-mysql
+      PubliclyAccessible: false
+      Tags:
+        - Key: Name
+          Value: animals-db-instance
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaBasicExecution
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+              - Effect: Allow
+                Action:
+                  - ec2:CreateNetworkInterface
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:DeleteNetworkInterface
+                Resource: '*'
+
+  AnimalsLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: AnimalsBackendHandler
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.9
+      Timeout: 10
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              print("Lambda invoked")
+              return {
+                  'statusCode': 200,
+                  'body': '{"message": "Hello from Lambda!"}'
+              }
+      VpcConfig:
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+        SecurityGroupIds:
+          - !Ref DBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: AnimalsBackendHandler
+
+Outputs:
+  AuroraEndpoint:
+    Description: The endpoint for the Aurora cluster
+    Value: !GetAtt AuroraCluster.Endpoint.Address
+
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+
+  PublicSubnet1Id:
+    Description: Public subnet 1 ID
+    Value: !Ref PublicSubnet1
+
+  PublicSubnet2Id:
+    Description: Public subnet 2 ID
+    Value: !Ref PublicSubnet2
+
+  PrivateSubnet1Id:
+    Description: Private subnet 1 ID
+    Value: !Ref PrivateSubnet1
+
+  PrivateSubnet2Id:
+    Description: Private subnet 2 ID
+    Value: !Ref PrivateSubnet2
+
+  LambdaFunctionName:
+    Description: Name of the Lambda function
+    Value: !Ref AnimalsLambdaFunction
