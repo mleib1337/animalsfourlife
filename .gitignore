@@ -1,0 +1,65 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python virtual environment folders
+venv/
+env/
+.env/
+
+# AWS SAM / Serverless Framework
+.aws-sam/
+.serverless/
+
+# AWS credentials and config files (never commit these!)
+*.pem
+*.key
+*.crt
+*.env
+
+# VSCode settings folder
+.vscode/
+
+# Node modules (if any frontend JS packages used)
+node_modules/
+
+# Logs
+*.log
+
+# macOS files
+.DS_Store
+
+# Python test cache
+.pytest_cache/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Static files built (optional, if you build locally and deploy)
+dist/
+build/
+
+# AWS CloudFormation temp files
+*.template
+*.json
+
+# Coverage reports
+.coverage
+htmlcov/
+
+# AWS Lambda deployment packages (if you build them locally)
+*.zip
+
+# Ignore local config files
+local.settings.json
+
+# Ignore environment variable files
+.env
+
+# Ignore frontend build outputs (if applicable)
+out/
+public/
+
+# Ignore S3 bucket files or local cache (if you keep any)
+s3-cache/
